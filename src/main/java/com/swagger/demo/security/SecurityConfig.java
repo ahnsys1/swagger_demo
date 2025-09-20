@@ -21,14 +21,18 @@ public class SecurityConfig {
     private static final String[] SWAGGER_WHITELIST = {
         "/v3/api-docs/**",
         "/swagger-ui/**",
-        "/swagger-ui.html",};
+        "/swagger-ui.html",
+        "/index.html"};
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                // Configure CSRF protection
                 .csrf(csrf -> csrf
-                // Send the CSRF token in a cookie (XSRF-TOKEN) that JavaScript can read.
+                // Use a cookie-based repository, common for SPAs.
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                // Disable CSRF for API endpoints, which are meant for non-browser clients.
+                .ignoringRequestMatchers("/api/**")
                 )
                 .authorizeHttpRequests(authorize -> authorize
                 // Allow unauthenticated access to Swagger UI resources
@@ -36,8 +40,11 @@ public class SecurityConfig {
                 // All other requests must be authenticated
                 .anyRequest().authenticated()
                 )
-                // Enable form-based login with default configuration
-                .formLogin(Customizer.withDefaults());
+                // Enable form-based login for browser interaction
+                .formLogin(Customizer.withDefaults())
+                // Enable HTTP Basic Auth for API clients like Postman
+                .httpBasic(Customizer.withDefaults());
+
         return http.build();
     }
 
