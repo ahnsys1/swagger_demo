@@ -2,6 +2,7 @@ package com.swagger.demo.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -22,28 +23,54 @@ public class SecurityConfig {
         "/v3/api-docs/**",
         "/swagger-ui/**",
         "/swagger-ui.html",
-        "/index.html"};
+        "/index.html"
+    };
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    @Profile("!prod")
+    public SecurityFilterChain devSecurityFilterChain(HttpSecurity http) throws Exception {
+        // Lenient configuration for development and testing
         http
-                // Configure CSRF protection
+                .csrf(csrf -> csrf
+                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                // Disable CSRF for API and H2 console for easier testing
+                .ignoringRequestMatchers("/api/**", "/h2-console/**")
+                )
+                // Allow H2 console to be embedded in a frame
+                .headers(headers -> headers.frameOptions().sameOrigin())
+                .authorizeHttpRequests(authorize -> authorize
+                .requestMatchers("/", "/index.html").permitAll()
+                .requestMatchers(SWAGGER_WHITELIST).permitAll()
+                .requestMatchers("/h2-console/**").permitAll()
+                .anyRequest().authenticated()
+                )
+                .formLogin(Customizer.withDefaults())
+                .httpBasic(Customizer.withDefaults());
+
+        return http.build();
+    }
+
+    @Bean
+    @Profile("prod")
+    public SecurityFilterChain prodSecurityFilterChain(HttpSecurity http) throws Exception {
+        // Stricter configuration for production
+        http
                 .csrf(csrf -> csrf
                 // Use a cookie-based repository, common for SPAs.
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                // Disable CSRF for API endpoints, which are meant for non-browser clients.
-                .ignoringRequestMatchers("/api/**")
+                // In production, CSRF is enabled for all state-changing requests by default.
                 )
                 .authorizeHttpRequests(authorize -> authorize
-                // Allow unauthenticated access to Swagger UI resources
+                // Publicly accessible home page
+                .requestMatchers("/", "/index.html").permitAll()
+                // NOTE: You might want to disable Swagger in a real production environment.
                 .requestMatchers(SWAGGER_WHITELIST).permitAll()
                 // All other requests must be authenticated
                 .anyRequest().authenticated()
                 )
-                // Enable form-based login for browser interaction
-                .formLogin(Customizer.withDefaults())
-                // Enable HTTP Basic Auth for API clients like Postman
-                .httpBasic(Customizer.withDefaults());
+                // Use form login for user interaction
+                .formLogin(Customizer.withDefaults());
+        // HTTP Basic is not enabled for production
 
         return http.build();
     }
